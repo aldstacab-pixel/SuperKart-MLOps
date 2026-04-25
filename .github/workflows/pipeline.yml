@@ -43,43 +43,42 @@ jobs:
       - name: Install huggingface_hub
         run: pip install huggingface_hub
 
-      - name: Deploy to Hugging Face Space
+      - name: Deploy to Hugging Face Space (git)
         run: |
-          python - <<'PY'
-          import os, shutil
-          from huggingface_hub import Repository
+          set -euo pipefail
+          HF_USER=${{ env.HF_USER }}
+          HF_SPACE=${{ env.HF_SPACE }}
+          HF_TOKEN=${{ env.HF_TOKEN }}
+          SPACE_URL="https://huggingface.co/spaces/${HF_USER}/${HF_SPACE}"
+          TMP_DIR=hf_space_tmp
 
-          hf_user = os.environ['HF_USER']
-          hf_space = os.environ['HF_SPACE']
-          hf_token = os.environ['HF_TOKEN']
+          # Cleanup
+          rm -rf ${TMP_DIR}
 
-          space_repo = f"https://huggingface.co/spaces/{hf_user}/{hf_space}"
-          tmp_dir = 'hf_space_tmp'
+          # Clone using token in URL (token has push rights)
+          git clone "https://${HF_TOKEN}@huggingface.co/spaces/${HF_USER}/${HF_SPACE}" ${TMP_DIR}
 
-          # Cleanup old clone
-          if os.path.exists(tmp_dir):
-              shutil.rmtree(tmp_dir)
-
-          # Clone the Space
-          repo = Repository(local_dir=tmp_dir, clone_from=space_repo, use_auth_token=hf_token)
-
-          # Copy files from the workspace into the Space
-          src_root = os.getcwd()
-          files_to_copy = ['app.py', 'requirements.txt', 'README.md']
-
-          for fname in files_to_copy:
-              src = os.path.join(src_root, fname)
-              if os.path.exists(src):
-                  dst_name = 'streamlit_app.py' if fname == 'app.py' else fname
-                  dst = os.path.join(tmp_dir, dst_name)
-                  shutil.copy(src, dst)
+          # Copy files
+          SRC_ROOT="${{ github.workspace }}"
+          FILES_TO_COPY=("app.py" "requirements.txt" "README.md")
+          for fname in "${FILES_TO_COPY[@]}"; do
+            if [ -f "${SRC_ROOT}/${fname}" ]; then
+              dst_name="${fname}"
+              if [ "${fname}" = "app.py" ]; then
+                dst_name="streamlit_app.py"
+              fi
+              cp "${SRC_ROOT}/${fname}" "${TMP_DIR}/${dst_name}"
+            fi
+          done
 
           # Update .gitignore
-          gi = os.path.join(tmp_dir, '.gitignore')
-          with open(gi, 'a') as f:
-              f.write('\n.env\n.venv\n')
+          echo -e "\n.env\n.venv\n" >> ${TMP_DIR}/.gitignore || true
 
           # Commit & push
-          repo.push_to_hub(commit_message='CI: update Space app from GitHub Actions')
-          print('Pushed app to Space:', space_repo)
-          PY
+          pushd ${TMP_DIR}
+          git config user.email "actions@github.com"
+          git config user.name "github-actions"
+          git add .
+          git commit -m "CI: update Space app from GitHub Actions" || true
+          git push origin main
+          popd
