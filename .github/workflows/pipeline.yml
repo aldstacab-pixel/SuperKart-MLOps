@@ -1,0 +1,21 @@
+name: SuperKart MLOps Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Push to Hugging Face Spaces
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # Replace 'your-username/your-space-name' with your actual Space URL
+          git remote add hf https://x-access-token:$HF_TOKEN@huggingface.co/spaces/your-username/superkart-app
+          git push --force hf main
