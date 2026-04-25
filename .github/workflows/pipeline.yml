@@ -16,6 +16,69 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # Replace 'your-username/your-space-name' with your actual Space URL
-          git remote add hf https://x-access-token:$HF_TOKEN@huggingface.co/spaces/your-username/superkart-app
+          # This connects your GitHub repo to your Hugging Face Space
+          git remote add hf https://aldstacab-pixel:$HF_TOKEN@huggingface.co/spaces/aldstacab-pixel/superkart-app
           git push --force hf main
+
+  deploy_space:
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    env:
+      HF_USER: aldon-cabral
+      HF_SPACE: SuperKart-space
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install huggingface_hub
+        run: pip install huggingface_hub
+
+      - name: Deploy to Hugging Face Space
+        run: |
+          python - <<'PY'
+          import os, shutil
+          from huggingface_hub import Repository
+
+          hf_user = os.environ['HF_USER']
+          hf_space = os.environ['HF_SPACE']
+          hf_token = os.environ['HF_TOKEN']
+
+          space_repo = f"https://huggingface.co/spaces/{hf_user}/{hf_space}"
+          tmp_dir = 'hf_space_tmp'
+
+          # Cleanup old clone
+          if os.path.exists(tmp_dir):
+              shutil.rmtree(tmp_dir)
+
+          # Clone the Space
+          repo = Repository(local_dir=tmp_dir, clone_from=space_repo, use_auth_token=hf_token)
+
+          # Copy files from the workspace into the Space
+          src_root = os.getcwd()
+          files_to_copy = ['app.py', 'requirements.txt', 'README.md']
+
+          for fname in files_to_copy:
+              src = os.path.join(src_root, fname)
+              if os.path.exists(src):
+                  dst_name = 'streamlit_app.py' if fname == 'app.py' else fname
+                  dst = os.path.join(tmp_dir, dst_name)
+                  shutil.copy(src, dst)
+
+          # Update .gitignore
+          gi = os.path.join(tmp_dir, '.gitignore')
+          with open(gi, 'a') as f:
+              f.write('\n.env\n.venv\n')
+
+          # Commit & push
+          repo.push_to_hub(commit_message='CI: update Space app from GitHub Actions')
+          print('Pushed app to Space:', space_repo)
+          PY
