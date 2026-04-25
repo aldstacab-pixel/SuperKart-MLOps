@@ -5,24 +5,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      
-      - name: Push to Hugging Face Spaces
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          # This connects your GitHub repo to your Hugging Face Space
-          # Use the correct owner/space name that exists on Hugging Face
-          git remote add hf https://aldon-cabral:$HF_TOKEN@huggingface.co/spaces/aldon-cabral/SuperKart-space
-          git push --force hf main
-
-  deploy_space:
-    needs: deploy
+  deploy_to_huggingface:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     env:
@@ -35,62 +18,37 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install huggingface_hub
-        run: pip install huggingface_hub
-
-      - name: Deploy to Hugging Face Space (git)
+      - name: Deploy to Space
         run: |
           set -euo pipefail
-          HF_USER=${{ env.HF_USER }}
-          HF_SPACE=${{ env.HF_SPACE }}
-          HF_TOKEN=${{ env.HF_TOKEN }}
-          SPACE_URL="https://huggingface.co/spaces/${HF_USER}/${HF_SPACE}"
-          TMP_DIR=hf_space_tmp
-
-          # Cleanup
-          rm -rf ${TMP_DIR}
-
-          # Clone using token in URL (token has push rights)
-          git clone "https://${HF_TOKEN}@huggingface.co/spaces/${HF_USER}/${HF_SPACE}" ${TMP_DIR}
-
-          # Remove token from the remote URL so git won't try to prompt for a password on push
-          git -C ${TMP_DIR} remote set-url origin "https://huggingface.co/spaces/${HF_USER}/${HF_SPACE}"
-
-          # Copy files
-          SRC_ROOT="${{ github.workspace }}"
-          FILES_TO_COPY=("app.py" "requirements.txt" "README.md")
-          for fname in "${FILES_TO_COPY[@]}"; do
-            if [ -f "${SRC_ROOT}/${fname}" ]; then
-              dst_name="${fname}"
-              if [ "${fname}" = "app.py" ]; then
-                dst_name="streamlit_app.py"
-              fi
-              cp "${SRC_ROOT}/${fname}" "${TMP_DIR}/${dst_name}"
-            fi
-          done
-
-          # Update .gitignore
-          echo -e "\n.env\n.venv\n" >> ${TMP_DIR}/.gitignore || true
-
-          # Commit & push
-          pushd ${TMP_DIR}
+          
+          # 1. Setup Temporary Directory
+          TMP_DIR="hf_space_tmp"
+          rm -rf "$TMP_DIR"
+          
+          # 2. Clone (Using Token for Auth)
+          git clone "https://user:$HF_TOKEN@huggingface.co/spaces/$HF_USER/$HF_SPACE" "$TMP_DIR"
+          
+          # 3. Configure Git Identity
+          cd "$TMP_DIR"
           git config user.email "actions@github.com"
           git config user.name "github-actions"
+
+          # 4. Sync Files from GitHub Workspace
+          # Note: We use -f to ensure we don't fail if a file is missing
+          cp "${{ github.workspace }}/app.py" "streamlit_app.py" || echo "app.py not found"
+          cp "${{ github.workspace }}/requirements.txt" "." || echo "requirements.txt not found"
+          cp "${{ github.workspace }}/README.md" "." || echo "README.md not found"
+
+          # 5. Commit Changes
           git add .
-          git commit -m "CI: update Space app from GitHub Actions" || true
-
-          # Debug: show remotes (no secrets printed)
-          git remote -v || true
-          git config --get remote.origin.url || true
-
-          # Test authentication by listing refs (will use the provided header)
-          git -c http.extraheader="AUTHORIZATION: Bearer ${HF_TOKEN}" ls-remote "https://huggingface.co/spaces/${HF_USER}/${HF_SPACE}.git" || true
-
-          # Push using explicit URL with Authorization header to avoid interactive prompts
-          git -c http.extraheader="AUTHORIZATION: Bearer ${HF_TOKEN}" push "https://huggingface.co/spaces/${HF_USER}/${HF_SPACE}.git" main
-          popd
+          # Only commit if there are changes to avoid error
+          if git diff-index --quiet HEAD --; then
+            echo "No changes to commit"
+          else
+            git commit -m "CI: update Space app from GitHub Actions"
+            
+            # 6. Push using the authenticated URL directly
+            # This is the most reliable way in Actions to avoid "No such device" errors
+            git push https://aldon-cabral:$HF_TOKEN@huggingface.co/spaces/$HF_USER/$HF_SPACE main
+          fi
