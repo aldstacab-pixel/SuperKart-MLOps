@@ -58,6 +58,9 @@ jobs:
           # Clone using token in URL (token has push rights)
           git clone "https://${HF_TOKEN}@huggingface.co/spaces/${HF_USER}/${HF_SPACE}" ${TMP_DIR}
 
+          # Remove token from the remote URL so git won't try to prompt for a password on push
+          git -C ${TMP_DIR} remote set-url origin "https://huggingface.co/spaces/${HF_USER}/${HF_SPACE}"
+
           # Copy files
           SRC_ROOT="${{ github.workspace }}"
           FILES_TO_COPY=("app.py" "requirements.txt" "README.md")
