@@ -1,0 +1,9 @@
+pandas
+numpy
+scikit-learn==1.6.1
+xgboost
+huggingface_hub
+streamlit
+joblib
+datasets
+python-dotenv
