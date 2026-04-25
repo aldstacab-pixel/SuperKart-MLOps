@@ -17,7 +17,8 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           # This connects your GitHub repo to your Hugging Face Space
-          git remote add hf https://aldstacab-pixel:$HF_TOKEN@huggingface.co/spaces/aldstacab-pixel/superkart-app
+          # Use the correct owner/space name that exists on Hugging Face
+          git remote add hf https://aldon-cabral:$HF_TOKEN@huggingface.co/spaces/aldon-cabral/SuperKart-space
           git push --force hf main
 
   deploy_space:
