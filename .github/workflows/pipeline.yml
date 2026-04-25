@@ -83,6 +83,14 @@ jobs:
           git config user.name "github-actions"
           git add .
           git commit -m "CI: update Space app from GitHub Actions" || true
-          # Use http.extraheader to provide the HF_TOKEN in a header so git won't prompt for credentials
-          git -c http.extraheader="AUTHORIZATION: Bearer ${HF_TOKEN}" push origin main
+
+          # Debug: show remotes (no secrets printed)
+          git remote -v || true
+          git config --get remote.origin.url || true
+
+          # Test authentication by listing refs (will use the provided header)
+          git -c http.extraheader="AUTHORIZATION: Bearer ${HF_TOKEN}" ls-remote "https://huggingface.co/spaces/${HF_USER}/${HF_SPACE}.git" || true
+
+          # Push using explicit URL with Authorization header to avoid interactive prompts
+          git -c http.extraheader="AUTHORIZATION: Bearer ${HF_TOKEN}" push "https://huggingface.co/spaces/${HF_USER}/${HF_SPACE}.git" main
           popd
