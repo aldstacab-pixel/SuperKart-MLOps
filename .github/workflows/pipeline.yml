@@ -80,5 +80,6 @@ jobs:
           git config user.name "github-actions"
           git add .
           git commit -m "CI: update Space app from GitHub Actions" || true
-          git push origin main
+          # Use http.extraheader to provide the HF_TOKEN in a header so git won't prompt for credentials
+          git -c http.extraheader="AUTHORIZATION: Bearer ${HF_TOKEN}" push origin main
           popd
